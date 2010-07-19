@@ -21,13 +21,11 @@ LIGHTS.each_pair do |key, value|
   @current_state[key] = STATES.keys.find{ |k| STATES[k] == current_state.to_i }
 end
 
-puts @current_state.inspect
+puts "Current state: #{@current_state.inspect}"
 
 def turn states
-  puts states.inspect
   args = []
   states.each_pair do |light, state|
-    #puts "Trying #{light} #{state}."
 
     if @current_state.has_key?(light) && @current_state[light] != state
       args << "-#{state == :on ? 'o' : 'f'} #{LIGHTS[light]}"
@@ -36,7 +34,10 @@ def turn states
     end
   end
 
-  `sispmctl #{args.join(" ")}` unless args.empty?
+  unless args.empty?
+    puts "Changing to: #{states.inspect}"
+    `sispmctl #{args.join(" ")}`
+  end
 end
 
 begin
@@ -47,12 +48,18 @@ begin
       open(URL, "Authorization" => "Basic " << CREDENTIALS) do |page|
 
         content = page.read
-        building = content.include?('Building') || content.include?('Unknown') # || content.include?('CheckingModifications')
-        bad = content.include?('Failure') || content.include?('Exception') # || content.include?('Unknown')
+
+        # building and broken are defined states, unknown does not translate to
+        # a trafficlight state yet. it might translate to a flashing light once
+        # there is support for that.
+
+        building = content.include?('Building') || content.include?('Unknown')
+        broken = content.include?('Failure') || content.include?('Exception')
+        unknown = content.include?('CheckingModifications') || content.include?('Unknown')
 
         states = STATES.keys
         # turn :red => states[rand(2)], :yellow => states[rand(2)], :green => states[rand(2)]
-        turn :red => bad ? :on : :off, :yellow => building ? :on : :off, :green => !(bad || building) ? :on : :off
+        turn :red => broken ? :on : :off, :yellow => building ? :on : :off, :green => !(broken || building) ? :on : :off
 
       end
 
@@ -63,8 +70,8 @@ begin
       Process.exit
 
     rescue
-      # $stderr.puts $!
-      # $stderr.puts $@
+      puts "Error: #$!"
+      $stderr.puts $@
 
       turn :red => :off, :yellow => :off, :green => :off
 
